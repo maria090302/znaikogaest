@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>КонтролКо! Калкулатор</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.21.2/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body, html {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            width: 100%;
+            overflow-x: hidden;
+            background-color: transparent;
+            height: 100%;
+        }
+        .app-container {
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+            height: 100%;
+        }
+        input[type="range"] {
+            width: 100%;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            border-radius: 4px;
+            background: #e5e7eb;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: none;
+        }
+        button {
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+    </style>
+</head>
+<body>
+    <div id="kontrolko-app" class="app-container"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const WidmarkCalculator = () => {
+          // Потребителски данни
+          const [gender, setGender] = useState('male');
+          const [weight, setWeight] = useState(70);
+          const [drinks, setDrinks] = useState({
+            beer: 0,
+            wine: 0,
+            spirits: 0,
+            custom: 0
+          });
+          const [customDrink, setCustomDrink] = useState({
+            alcoholContent: '',
+            volume: ''
+          });
+          const [activeTab, setActiveTab] = useState('calculator');
+          
+          // Резултати
+          const [bac, setBac] = useState(0);
+          const [soberTime, setSoberTime] = useState(0);
+          const [effectLevel, setEffectLevel] = useState('');
+          
+          // Константи за формулата на Widmark
+          const r = gender === 'male' ? 0.68 : 0.55; // Фактор за разпределение (мъже: 0.68, жени: 0.55)
+          const metabolismRate = 0.015; // Скорост на елиминиране на алкохол (% на час)
+          
+          // Алкохолно съдържание и обем на различните напитки
+          const drinkDefinitions = {
+            beer: { alcoholContent: 0.05, volume: 500 }, // 5% бира, 500мл
+            wine: { alcoholContent: 0.12, volume: 150 }, // 12% вино, 150мл
+            spirits: { alcoholContent: 0.40, volume: 50 } // 40% спиртни напитки, 50мл
+          };
+          
+          // Изчисления базирани на формулата на Widmark
+          const calculateBAC = () => {
+            // Валидираме стойностите на моята напитка за изчислението
+            const validCustomDrink = {
+              alcoholContent: customDrink.alcoholContent === '' ? 0 : parseFloat(customDrink.alcoholContent),
+              volume: customDrink.volume === '' ? 0 : parseFloat(customDrink.volume)
+            };
+            
+            // Изчисляване на общото количество чист алкохол в грамове
+            const totalAlcohol = 
+              (drinks.beer * drinkDefinitions.beer.alcoholContent * drinkDefinitions.beer.volume) +
+              (drinks.wine * drinkDefinitions.wine.alcoholContent * drinkDefinitions.wine.volume) +
+              (drinks.spirits * drinkDefinitions.spirits.alcoholContent * drinkDefinitions.spirits.volume) +
+              (drinks.custom * validCustomDrink.volume * validCustomDrink.alcoholContent);
+            
+            // Конвертиране на мл в грамове (0.789 е плътността на етанола)
+            const alcoholGrams = totalAlcohol * 0.789;
+            
+            // Прилагане на формулата на Widmark без времевия компонент: BAC = A / (r * W)
+            // A = алкохол в грамове
+            // r = коефициент на разпределение
+            // W = тегло в кг
+            
+            const calculatedBAC = (alcoholGrams / (r * weight * 1000)) * 100;
+            return calculatedBAC > 0 ? calculatedBAC : 0;
+          };
+          
+          // Изчисляване на ефекти на различни нива
+          const getEffectLevel = (bacLevel) => {
+            if (bacLevel < 0.01) return "Нормално състояние, без видими ефекти.";
+            if (bacLevel < 0.05) return "Усещане за топлина, приказливост, повишено самочувствие.";
+            if (bacLevel < 0.08) return "Падане на задръжки, самонадеяно поведение, влошаване на вниманието.";
+            if (bacLevel < 0.15) return "Неясна реч, затруднено координиране на движенията, загуба на преценка.";
+            if (bacLevel < 0.30) return "Намален зрителен фокус, вероятност от повръщане, загуба на равновесие и участие в събития, които няма да помните.";
+            return "Опасност от алкохолно натравяне и животозастрашаващо състояние.";
+          };
+          
+          // Персонализиран съвет базиран на BAC
+          const getAdvice = (bacLevel) => {
+            if (bacLevel < 0.01) return "Ако решиш да пиеш, планирай предварително как ще се прибереш вкъщи безопасно.";
+            if (bacLevel < 0.05) return "Опитай се да пиеш по една напитка на час и да я редуваш с вода или безалкохолни напитки.";
+            if (bacLevel < 0.08) return "Забави темпото - не е зле да направиш пауза и да хапнеш нещо.";
+            if (bacLevel < 0.15) return "Координацията ти е значително намалена. Спри с алкохола и използвай такси, градски транспорт или помощ от трезвен приятел, за да се прибереш.";
+            if (bacLevel < 0.30) return "Не оставай сам и не взимай решения. Пий вода и потърси помощ за прибиране.";
+            return "Потърси помощ, не предприемай нищо сам.";
+          };
+          
+          // Изчисляване на време до изтрезняване
+          const calculateSoberTime = (bacLevel) => {
+            return bacLevel / metabolismRate;
+          };
+          
+          // Преизчисляване при промяна на входните данни
+          useEffect(() => {
+            const calculatedBAC = calculateBAC();
+            setBac(calculatedBAC);
+            setSoberTime(calculateSoberTime(calculatedBAC));
+            setEffectLevel(getEffectLevel(calculatedBAC));
+          }, [gender, weight, drinks, customDrink]);
+          
+          // Обработка на промяна в обема
+          const handleVolumeChange = (e) => {
+            const value = e.target.value;
+            if (value === '') {
+              setCustomDrink({...customDrink, volume: ''});
+            } else {
+              const numValue = parseInt(value);
+              if (!isNaN(numValue)) {
+                setCustomDrink({...customDrink, volume: numValue});
+              }
+            }
+          };
+          
+          // Обработка на промяна в процента алкохол
+          const handleAlcoholChange = (e) => {
+            const value = e.target.value;
+            if (value === '') {
+              setCustomDrink({...customDrink, alcoholContent: ''});
+            } else {
+              const numValue = parseFloat(value);
+              if (!isNaN(numValue)) {
+                setCustomDrink({...customDrink, alcoholContent: numValue / 100});
+              }
+            }
+          };
+
+          // Стилове
+          const styles = {
+            container: {
+              width: '100%',
+              maxWidth: '100%',
+              margin: '0 auto',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+              border: '1px solid #e5e7eb',
+              borderRadius: '0.5rem',
+              backgroundColor: '#ffffff'
+            },
+            innerContainer: {
+              padding: '1rem',
+            },
+            header: {
+              textAlign: 'center',
+              marginBottom: '1.5rem'
+            },
+            title: {
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+              marginBottom: '0.5rem'
+            },
+            subtitle: {
+              color: '#6b7280'
+            },
+            tabs: {
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              marginBottom: '1.5rem',
+              backgroundColor: '#f3f4f6',
+              borderRadius: '0.5rem',
+              overflow: 'hidden'
+            },
+            tabButton: {
+              padding: '0.5rem',
+              textAlign: 'center',
+              fontWeight: '500',
+              cursor: 'pointer',
+              border: 'none',
+              background: 'none'
+            },
+            activeTab: {
+              backgroundColor: '#3b82f6',
+              color: 'white'
+            },
+            section: {
+              marginBottom: '1.5rem'
+            },
+            label: {
+              fontWeight: '500',
+              marginBottom: '0.5rem',
+              display: 'block'
+            },
+            genderButtons: {
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '0.5rem'
+            },
+            genderButton: {
+              padding: '0.5rem 1rem',
+              borderRadius: '0.375rem',
+              backgroundColor: '#f3f4f6',
+              border: 'none',
+              cursor: 'pointer'
+            },
+            activeMale: {
+              backgroundColor: '#dbeafe',
+              border: '1px solid #3b82f6'
+            },
+            activeFemale: {
+              backgroundColor: '#fce7f3',
+              border: '1px solid #db2777'
+            },
+            weightContainer: {
+              marginBottom: '0.5rem'
+            },
+            weightLabel: {
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: '0.5rem'
+            },
+            slider: {
+              width: '100%'
+            },
+            drinkItem: {
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '0.75rem',
+              backgroundColor: '#f9fafb',
+              borderRadius: '0.375rem',
+              marginBottom: '1rem'
+            },
+            drinkLabel: {
+              display: 'flex',
+              alignItems: 'center'
+            },
+            counter: {
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            },
+            counterButton: {
+              width: '2rem',
+              height: '2rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#e5e7eb',
+              borderRadius: '9999px',
+              border: 'none',
+              cursor: 'pointer'
+            },
+            counterDisplay: {
+              width: '2rem',
+              textAlign: 'center'
+            },
+            customDrink: {
+              padding: '0.75rem',
+              backgroundColor: '#f9fafb',
+              borderRadius: '0.375rem',
+              marginBottom: '1rem'
+            },
+            customDrinkContainer: {
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '0.5rem',
+              justifyContent: 'space-between'
+            },
+            customDrinkTop: {
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '0.5rem'
+            },
+            inputSm: {
+              width: '4rem',
+              padding: '0.25rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #d1d5db',
+              fontSize: '0.875rem'
+            },
+            calculateButton: {
+              width: '100%',
+              padding: '0.75rem',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              fontWeight: 'bold',
+              borderRadius: '0.375rem',
+              border: 'none',
+              cursor: 'pointer',
+              marginTop: '1.5rem'
+            },
+            results: {
+              padding: '1rem',
+              borderRadius: '0.5rem'
+            },
+            resultHeader: {
+              textAlign: 'center',
+              marginBottom: '1rem'
+            },
+            resultTitle: {
+              fontSize: '1.25rem',
+              fontWeight: 'bold',
+              marginBottom: '0.25rem'
+            },
+            resultSubtitle: {
+              fontSize: '0.875rem',
+              color: '#4b5563'
+            },
+            resultItem: {
+              backgroundColor: 'rgba(255, 255, 255, 0.7)',
+              padding: '0.75rem',
+              borderRadius: '0.375rem',
+              marginBottom: '1rem'
+            },
+            resultRow: {
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            },
+            resultLabel: {
+              display: 'flex',
+              alignItems: 'center'
+            },
+            resultIcon: {
+              marginRight: '0.5rem'
+            },
+            resultText: {
+              fontWeight: '500'
+            },
+            resultValue: {
+              fontWeight: 'bold'
+            },
+            resultEffect: {
+              marginBottom: '0.25rem',
+              fontWeight: '500'
+            },
+            resultEffectText: {
+              fontSize: '0.875rem'
+            },
+            advice: {
+              padding: '0.75rem',
+              backgroundColor: '#eff6ff',
+              borderRadius: '0.375rem'
+            },
+            adviceTitle: {
+              marginBottom: '0.25rem',
+              fontWeight: '500'
+            },
+            adviceText: {
+              fontSize: '0.875rem'
+            },
+            backButton: {
+              width: '100%',
+              padding: '0.5rem',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              fontWeight: '500',
+              borderRadius: '0.375rem',
+              border: 'none',
+              cursor: 'pointer',
+              marginTop: '1rem'
+            },
+            disclaimer: {
+              marginTop: '1.5rem',
+              fontSize: '0.75rem',
+              color: '#6b7280',
+              textAlign: 'center'
+            }
+          };
+
+          // Добавяне на медиа заявки за респонсивност
+          const isMobile = window.innerWidth < 640;
+          
+          return (
+            <div style={styles.container}>
+              <div style={styles.innerContainer}>
+                <div style={styles.header}>
+                  <h2 style={styles.title}>КонтролКо!</h2>
+                  <p style={styles.subtitle}>Знай кога е стоп - остани топ!</p>
+                </div>
+                
+                <div style={{width: '100%'}}>
+                  <div style={styles.tabs}>
+                    <button 
+                      style={{...styles.tabButton, ...(activeTab === 'calculator' ? styles.activeTab : {})}}
+                      onClick={() => setActiveTab('calculator')}
+                    >
+                      КонтролКо!
+                    </button>
+                    <button 
+                      style={{...styles.tabButton, ...(activeTab === 'results' ? styles.activeTab : {})}}
+                      onClick={() => setActiveTab('results')}
+                    >
+                      Резултати
+                    </button>
+                  </div>
+                  
+                  {activeTab === 'calculator' && (
+                    <div>
+                      {/* Пол */}
+                      <div style={{marginBottom: '1.5rem'}}>
+                        <label style={styles.label}>Пол</label>
+                        <div style={styles.genderButtons}>
+                          <button 
+                            style={{
+                              ...styles.genderButton, 
+                              ...(gender === 'male' ? styles.activeMale : {})
+                            }}
+                            onClick={() => setGender('male')}
+                          >
+                            Мъж
+                          </button>
+                          <button 
+                            style={{
+                              ...styles.genderButton, 
+                              ...(gender === 'female' ? styles.activeFemale : {})
+                            }}
+                            onClick={() => setGender('female')}
+                          >
+                            Жена
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Тегло */}
+                      <div style={{marginBottom: '1.5rem'}}>
+                        <div style={styles.weightLabel}>
+                          <label style={{fontWeight: '500'}}>Тегло</label>
+                          <span>{weight} кг</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="40" 
+                          max="120" 
+                          value={weight}
+                          style={styles.slider}
+                          onChange={(e) => setWeight(parseInt(e.target.value))}
+                        />
+                      </div>
+                      
+                      {/* Напитки */}
+                      <div style={{marginBottom: '1.5rem'}}>
+                        <label style={styles.label}>Напитки</label>
+                        
+                        <div style={styles.drinkItem}>
+                          <div style={styles.drinkLabel}>
+                            <span style={{marginRight: '0.5rem'}}>🥃</span>
+                            <span style={{fontSize: isMobile ? '0.875rem' : '1rem'}}>Спиртна напитка (50мл, 40%)</span>
+                          </div>
+                          <div style={styles.counter}>
+                            <button 
+                              style={styles.counterButton}
+                              onClick={() => setDrinks({...drinks, spirits: Math.max(0, drinks.spirits - 1)})}
+                            >
+                              -
+                            </button>
+                            <span style={styles.counterDisplay}>{drinks.spirits}</span>
+                            <button 
+                              style={styles.counterButton}
+                              onClick={() => setDrinks({...drinks, spirits: drinks.spirits + 1})}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div style={styles.drinkItem}>
+                          <div style={styles.drinkLabel}>
+                            <span style={{marginRight: '0.5rem'}}>🍺</span>
+                            <span style={{fontSize: isMobile ? '0.875rem' : '1rem'}}>Бира (500мл, 5%)</span>
+                          </div>
+                          <div style={styles.counter}>
+                            <button 
+                              style={styles.counterButton}
+                              onClick={() => setDrinks({...drinks, beer: Math.max(0, drinks.beer - 1)})}
+                            >
+                              -
+                            </button>
+                            <span style={styles.counterDisplay}>{drinks.beer}</span>
+                            <button 
+                              style={styles.counterButton}
+                              onClick={() => setDrinks({...drinks, beer: drinks.beer + 1})}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div style={styles.drinkItem}>
+                          <div style={styles.drinkLabel}>
+                            <span style={{marginRight: '0.5rem'}}>🍷</span>
+                            <span style={{fontSize: isMobile ? '0.875rem' : '1rem'}}>Вино (150мл, 12%)</span>
+                          </div>
+                          <div style={styles.counter}>
+                            <button 
+                              style={styles.counterButton}
+                              onClick={() => setDrinks({...drinks, wine: Math.max(0, drinks.wine - 1)})}
+                            >
+                              -
+                            </button>
+                            <span style={styles.counterDisplay}>{drinks.wine}</span>
+                            <button 
+                              style={styles.counterButton}
+                              onClick={() => setDrinks({...drinks, wine: drinks.wine + 1})}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div style={styles.customDrink}>
+                          <div style={styles.customDrinkContainer}>
+                            <div style={styles.customDrinkTop}>
+                              <span style={{fontSize: isMobile ? '0.875rem' : '1rem'}}>Моя напитка</span>
+                              <input 
+                                type="text" 
+                                style={styles.inputSm}
+                                value={customDrink.volume === '' ? '' : customDrink.volume}
+                                onChange={handleVolumeChange}
+                                placeholder="мл"
+                              />
+                              <input 
+                                type="text" 
+                                style={{...styles.inputSm, width: '3rem'}}
+                                value={customDrink.alcoholContent === '' ? '' : (customDrink.alcoholContent * 100)}
+                                onChange={handleAlcoholChange}
+                                placeholder="%"
+                              />
+                            </div>
+                            <div style={styles.counter}>
+                              <button 
+                                style={styles.counterButton}
+                                onClick={() => setDrinks({...drinks, custom: Math.max(0, drinks.custom - 1)})}
+                              >
+                                -
+                              </button>
+                              <span style={styles.counterDisplay}>{drinks.custom}</span>
+                              <button 
+                                style={styles.counterButton}
+                                onClick={() => setDrinks({...drinks, custom: drinks.custom + 1})}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Бутон Изчисли */}
+                      <button 
+                        style={styles.calculateButton}
+                        onClick={() => setActiveTab('results')}
+                      >
+                        Изчисли
+                      </button>
+                    </div>
+                  )}
+                  
+                  {activeTab === 'results' && (
+                    <div 
+                      style={{
+                        ...styles.results, 
+                        backgroundColor: bac < 0.01 ? '#f0fdf4' : 
+                                        bac < 0.05 ? '#dcfce7' :
+                                        bac < 0.08 ? '#fef9c3' :
+                                        bac < 0.15 ? '#fef08a' :
+                                        bac < 0.30 ? '#fed7aa' : '#fecaca'
+                      }}
+                    >
+                      <div style={styles.resultHeader}>
+                        <h3 style={styles.resultTitle}>Резултати</h3>
+                        <p style={styles.resultSubtitle}>Базирани на формулата на Widmark</p>
+                      </div>
+                      
+                      <div>
+                        <div style={styles.resultItem}>
+                          <div style={styles.resultRow}>
+                            <div style={styles.resultLabel}>
+                              <span style={styles.resultIcon}>📊</span>
+                              <span style={styles.resultText}>Ниво на алкохол в кръвта:</span>
+                            </div>
+                            <span style={styles.resultValue}>{bac.toFixed(3)}%</span>
+                          </div>
+                        </div>
+                        
+                        <div style={styles.resultItem}>
+                          <div style={styles.resultRow}>
+                            <div style={styles.resultLabel}>
+                              <span style={styles.resultIcon}>⏱️</span>
+                              <span style={styles.resultText}>Време до изтрезняване:</span>
+                            </div>
+                            <span style={styles.resultValue}>
+                              {Math.floor(soberTime)} ч {Math.round((soberTime - Math.floor(soberTime)) * 60)} мин
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div style={styles.resultItem}>
+                          <div style={styles.resultEffect}>Вероятни ефекти:</div>
+                          <div style={styles.resultEffectText}>{effectLevel}</div>
+                        </div>
+                        
+                        <div style={styles.advice}>
+                          <div style={styles.adviceTitle}>Съвет от мен:</div>
+                          <div style={styles.adviceText}>{getAdvice(bac)}</div>
+                        </div>
+                      </div>
+                      
+                      <button 
+                        style={styles.backButton}
+                        onClick={() => setActiveTab('calculator')}
+                      >
+                        Назад към калкулатора
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                <div style={styles.disclaimer}>
+                  Важна забележка: Изчисленията са приблизителни и не трябва да се използват за медицински цели или за определяне на годност за шофиране.
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // Рендериране на компонента в DOM-а
+        ReactDOM.render(<WidmarkCalculator />, document.getElementById('kontrolko-app'));
+    </script>
+</body>
+</html>
